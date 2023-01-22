@@ -4,3 +4,6 @@
 [submodule "rtl/jtopl"]
 	path = rtl/jtopl
 	url = https://github.com/jotego/jtopl.git
+[submodule "DeMiSTify"]
+	path = DeMiSTify
+	url = https://github.com/robinsonb5/DeMiSTify.git

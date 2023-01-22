@@ -60,6 +60,17 @@ module Next186_MiST(
 	output        I2S_DATA,
 `endif
 
+`ifdef DEMISTIFY
+	input PS2K_CLK,
+	input PS2K_DAT,
+	input PS2M_CLK,
+	input PS2M_DAT,
+	output PS2K_CLK_OUT,
+	output PS2K_DAT_OUT,
+	output PS2M_CLK_OUT,
+	output PS2M_DAT_OUT,
+`endif
+
 	input         UART_RX,
 	output        UART_TX
 
@@ -151,30 +162,43 @@ wire        clk_sys = clk_25;
 
 assign SDRAM_CKE = 1'b1;
 
+wire plsys;
+wire plmisc;
+wire plcpu;
+
 dcm dcm_system (
 	.inclk0(CLOCK_27),
 	.c0(SDRAM_CLK),
 	.c1(clk_sdr),
 	.c2(clk_cpu),
-	.c3(clk_dsp)
+	.c3(clk_dsp),
+	.c4(clk_25),
+	.locked(plsys)
 );
 
 dcm_misc dcm_misc (
 	.inclk0(CLOCK_27),
 	.c0(),
 	.c1(CLK14745600),
-	.c2(clk_mpu)
+	.c2(clk_mpu),
+	.locked(plmisc)
 );
 
-dcm_cpu dcm_cpu_inst (
-	.inclk0(CLOCK_27),
-	.c0(clk_25)
-);
+//dcm_cpu dcm_cpu_inst (
+//	.inclk0(clk_sdr),
+//	.c0(clk_25),
+//	.locked(plcpu)
+//);
+
+wire plls_locked;
+assign plls_locked = plmisc & plsys;// & plcpu;
 
 reg  reset;
-    
-always @(posedge clk_cpu) reset <= status[0] | buttons[1] | !bios_loaded;
-	
+
+always @(posedge clk_cpu) begin
+	reset <= status[0] | buttons[1] | (!bios_loaded) | (!plls_locked);
+end
+
 // user io
 wire [63:0] status;
 wire  [1:0] buttons;
@@ -213,7 +237,22 @@ wire        no_csync;
 
 assign LED = ~led_out[0]; // CPU HALT
 
+`ifdef DEMISTIFY
+wire ps2k_clk_fw;
+wire ps2k_dat_fw;
+assign ps2_kbd_clk = PS2K_CLK & ps2k_clk_fw;
+assign ps2_kbd_dat = PS2K_DAT & ps2k_dat_fw;
+assign PS2K_CLK_OUT = ps2_kbd_clk_i;
+assign PS2K_DAT_OUT = ps2_kbd_dat_i;
+assign ps2_mouse_clk = PS2M_CLK;
+assign ps2_mouse_dat = PS2M_DAT;
+assign PS2M_CLK_OUT = ps2_mouse_clk_i;
+assign PS2M_DAT_OUT = ps2_mouse_dat_i;
+
+user_io #(.STRLEN($size(CONF_STR)>>3), .FEATURES(32'h580) /* Secondary IDE - ATA, Primary Slave - CDROM*/) user_io(
+`else
 user_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(2000), .PS2BIDIR(1'b1), .FEATURES(32'h580) /* Secondary IDE - ATA, Primary Slave - CDROM*/) user_io(
+`endif
 	.conf_str        ( CONF_STR      ),
 	.clk_sys         ( clk_cpu       ),
 	.clk_sd          ( clk_cpu       ),
@@ -252,7 +291,10 @@ user_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(2000), .PS2BIDIR(1'b1), .FEATURES
 
 	.img_mounted     ( img_mounted   ),
 	.img_size        ( img_size      ),
-
+`ifdef DEMISTIFY
+	.ps2_kbd_clk     ( ps2k_clk_fw   ), 
+	.ps2_kbd_data    ( ps2k_dat_fw   )
+`else
 	.ps2_kbd_clk     ( ps2_kbd_clk   ), 
 	.ps2_kbd_data    ( ps2_kbd_dat   ),
 	.ps2_kbd_clk_i   ( ps2_kbd_clk_i ),
@@ -261,6 +303,7 @@ user_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(2000), .PS2BIDIR(1'b1), .FEATURES
 	.ps2_mouse_clk_i ( ps2_mouse_clk_i ), 
 	.ps2_mouse_data  ( ps2_mouse_dat ),
 	.ps2_mouse_data_i( ps2_mouse_dat_i )
+`endif
 );
 
 // wire the sd card to the user port
@@ -329,8 +372,8 @@ mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS)) mist_video (
 	.G           ( core_g     ),
 	.B           ( core_b     ),
 
-	.HSync       ( ~core_hs   ),
-	.VSync       ( ~core_vs   ),
+	.HSync       ( core_hs   ),
+	.VSync       ( core_vs   ),
 
 	// MiST video output signals
 	.VGA_R       ( VGA_R      ),
@@ -398,6 +441,7 @@ reg [15:0] bios_din;
 reg        bios_wr = 0;
 wire       bios_req;
 reg        bios_loaded = 0;
+reg [15:0] bios_checksum = 16'h0 /* synthesis noprune */;
 
 always @(posedge clk_sdr) begin
 	reg [7:0] dat;
@@ -408,6 +452,7 @@ always @(posedge clk_sdr) begin
 	if (ioctl_downl & ~ioctl_downlD) begin
 		bios_addr <= 0;
 		bios_wr <= 0;
+		bios_checksum <= 16'h0;
 	end
 
 	if (ioctl_downlD & ~ioctl_downl) bios_loaded <= 1;
@@ -423,6 +468,9 @@ always @(posedge clk_sdr) begin
 
 	bios_reqD <= bios_req;
 	if (bios_reqD & ~bios_req) bios_wr <= 0;
+
+	if (bios_reqD & ~bios_req)
+		bios_checksum <= bios_checksum + bios_din;
 
 	if (ioctl_downl & bios_req) begin
 		bios_addr <= bios_addr + 1'd1;
@@ -588,6 +636,8 @@ system sys_inst (
 	.clk_en_44100(cen_44100),
 	.clk_dsp(clk_dsp),
 
+	.init_reset(~plls_locked),
+	
 	.fake286(fake286_r2),
 	.adlibhide(adlibhide),
 	.cpu_speed(cpu_speed),

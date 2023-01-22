@@ -19,62 +19,54 @@
 # Altera or its authorized distributors.  Please refer to the 
 # applicable agreement for further details.
 
-
-
-# Clock constraints
-
-create_clock -name "CLOCK_27" -period 37.037 [get_ports {CLOCK_27}]
-create_clock -name {SPI_SCK}  -period 41.666 -waveform { 20.8 41.666 } [get_ports {SPI_SCK}]
-
 # Automatically constrain PLL and other generated clocks
 derive_pll_clocks -create_base_clocks
 
 # Automatically calculate clock uncertainty to jitter and other effects.
 derive_clock_uncertainty
 
-set sdram_clk "dcm_system|altpll_component|auto_generated|pll1|clk[0]"
-set mem_clk   "dcm_system|altpll_component|auto_generated|pll1|clk[1]"
-set sys_clk   "dcm_cpu_inst|altpll_component|auto_generated|pll1|clk[0]"
+set sdram_clk "${topmodule}dcm_system|altpll_component|auto_generated|pll1|clk[0]"
+set mem_clk   "${topmodule}dcm_system|altpll_component|auto_generated|pll1|clk[1]"
+set sys_clk   "${topmodule}dcm_cpu_inst|altpll_component|auto_generated|pll1|clk[0]"
 
-set snd_clk   "dcm_system|altpll_component|auto_generated|pll1|clk[2]"
-set uart_clk  "dcm_misc|altpll_component|auto_generated|pll1|clk[1]"
-set mpu_clk   "dcm_misc|altpll_component|auto_generated|pll1|clk[2]"
+set snd_clk   "${topmodule}dcm_system|altpll_component|auto_generated|pll1|clk[2]"
+set uart_clk  "${topmodule}dcm_misc|altpll_component|auto_generated|pll1|clk[1]"
+set mpu_clk   "${topmodule}dcm_misc|altpll_component|auto_generated|pll1|clk[2]"
 
-set cpu_clk   "dcm_system|altpll_component|auto_generated|pll1|clk[2]"
-set dsp_clk   "dcm_system|altpll_component|auto_generated|pll1|clk[3]"
+set cpu_clk   "${topmodule}dcm_system|altpll_component|auto_generated|pll1|clk[2]"
+set dsp_clk   "${topmodule}dcm_system|altpll_component|auto_generated|pll1|clk[3]"
 
 # Clock groups
-set_clock_groups -asynchronous -group [get_clocks {SPI_SCK}] -group [get_clocks dcm_system|altpll_component|auto_generated|pll1|clk[*]]
-set_clock_groups -asynchronous -group [get_clocks {SPI_SCK}] -group [get_clocks dcm_cpu_inst|altpll_component|auto_generated|pll1|clk[*]]
+set_clock_groups -asynchronous -group [get_clocks {spiclk}] -group [get_clocks ${topmodule}dcm_system|altpll_component|auto_generated|pll1|clk[*]]
+set_clock_groups -asynchronous -group [get_clocks {spiclk}] -group [get_clocks ${topmodule}dcm_cpu_inst|altpll_component|auto_generated|pll1|clk[*]]
 set_clock_groups -asynchronous -group [get_clocks $cpu_clk] -group [get_clocks $sys_clk]
 
-set_multicycle_path -from [get_registers {sys_inst|CPUUnit|cpu*}] -setup -start 2
-set_multicycle_path -from [get_registers {sys_inst|CPUUnit|cpu*}] -hold -start 1
-set_multicycle_path -from [get_registers {sys_inst|CPUUnit|cpu*}] -to [get_registers {sys_inst|seg_mapper|*addr*}] -setup -start 1
-set_multicycle_path -from [get_registers {sys_inst|CPUUnit|cpu*}] -to [get_registers {sys_inst|seg_mapper|*addr*}] -hold -start 0
+set_multicycle_path -from [get_registers ${topmodule}sys_inst|CPUUnit|cpu|*] -setup -start 2
+set_multicycle_path -from [get_registers ${topmodule}sys_inst|CPUUnit|cpu|*] -hold -start 1
+set_multicycle_path -from [get_registers ${topmodule}sys_inst|CPUUnit|cpu|*] -to [get_registers ${topmodule}sys_inst|seg_mapper|*addr*] -setup -start 1
+set_multicycle_path -from [get_registers ${topmodule}sys_inst|CPUUnit|cpu|*] -to [get_registers ${topmodule}sys_inst|seg_mapper|*addr*] -hold -start 0
 
-set_multicycle_path -from [get_registers {fake286_r2}] -setup -start 2
-set_multicycle_path -from [get_registers {fake286_r2}] -hold -start 1
+set_multicycle_path -from [get_registers ${topmodule}fake286_r2] -setup -start 2
+set_multicycle_path -from [get_registers ${topmodule}fake286_r2] -hold -start 1
 
 # Some relaxed constrain to the VGA pins. The signals should arrive together, the delay is not really important.
-set_output_delay -clock [get_clocks $sys_clk] -max 0 [get_ports {VGA_*}]
-set_output_delay -clock [get_clocks $sys_clk] -min -5 [get_ports {VGA_*}]
+set_output_delay -clock [get_clocks $sys_clk] -max 0 [get_ports ${VGA_OUT}]
+set_output_delay -clock [get_clocks $sys_clk] -min -5 [get_ports ${VGA_OUT}]
 
 # SDRAM delays
-set_input_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports {SDRAM_CLK}] -max 6.4 [get_ports SDRAM_DQ[*]]
-set_input_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports {SDRAM_CLK}] -min 3.5 [get_ports SDRAM_DQ[*]]
+set_input_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports ${RAM_CLK}] -max 6.4 [get_ports ${RAM_IN}]
+set_input_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports ${RAM_CLK}] -min 3.5 [get_ports ${RAM_IN}]
 
-set_output_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports {SDRAM_CLK}] -max 1.5 [get_ports {SDRAM_D* SDRAM_A* SDRAM_BA* SDRAM_n* SDRAM_CKE}]
-set_output_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports {SDRAM_CLK}] -min -0.8 [get_ports {SDRAM_D* SDRAM_A* SDRAM_BA* SDRAM_n* SDRAM_CKE}]
+set_output_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports ${RAM_CLK}] -max 1.5 [get_ports ${RAM_OUT}]
+set_output_delay -clock [get_clocks $sdram_clk] -reference_pin [get_ports ${RAM_CLK}] -min -0.8 [get_ports ${RAM_OUT}]
 
-#set_multicycle_path -from [get_clocks $sdram_clk] -to [get_clocks $mem_clk] -setup 2
+set_multicycle_path -from [get_clocks $sdram_clk] -to [get_clocks $mem_clk] -setup 2
+# set_multicycle_path -from [get_clocks {dcm_system|altpll_component|auto_generated|pll1|clk[0]}] -to [get_clocks {dcm_system|altpll_component|auto_generated|pll1|clk[1]}] -setup -end 2
 
 set_clock_groups -asynchronous -group [get_clocks $mpu_clk]  -group [get_clocks $cpu_clk]
 set_clock_groups -asynchronous -group [get_clocks $uart_clk] -group [get_clocks $cpu_clk]
 set_clock_groups -asynchronous -group [get_clocks $cpu_clk]  -group [get_clocks $mem_clk]
 set_clock_groups -asynchronous -group [get_clocks $dsp_clk]  -group [get_clocks $mem_clk]
 
-set_false_path -to [get_ports {SDRAM_CLK}]
-set_false_path -to [get_ports {AUDIO_L}]
-set_false_path -to [get_ports {AUDIO_R}]
-set_false_path -to [get_ports {LED}]
+set_false_path -to [get_ports ${FALSE_OUT}]
+set_false_path -from [get_ports ${FALSE_IN}]

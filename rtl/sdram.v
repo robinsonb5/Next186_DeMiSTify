@@ -61,6 +61,7 @@
 
 module SDRAM_16bit(
 		input sys_CLK,						// clock
+		input reset_in,
 		input [1:0]sys_CMD,				// 00=nop, 01 = write WR2 words, 10=read RD1 words, 11=read RD2 words
 		input [`RowBits+`BankBits+`ColBits-`PitchBits-1:0]sys_ADDR,			// word address, multiple of 2^PitchBits words
 		input [15:0]sys_DIN,				// data input
@@ -92,11 +93,21 @@ module SDRAM_16bit(
 	reg [15:0]reg_din;
 	reg [2:0]out_data_valid = 0;
 	
+	reg [1:0] reset_s = 2'b11;
+	always @(posedge sys_CLK)
+		reset_s<={reset_s[0],reset_in};
+	wire reset = reset_s[1];
+	
 	assign sdr_DATA = out_data_valid[2] ? reg_din : 16'hzzzz;
 
-	always @(posedge sys_CLK) begin
+	always @(posedge sys_CLK,posedge reset) begin
+		if(reset) begin
+			counter<=16'h0000;
+			STATE<=0;
+			sdr_DQM<=2'b11;
+		end else begin
 			counter <= counter + 1;
-			sdr_n_CS_WE_RAS_CAS <= 4'b1xxx; // NOP
+			sdr_n_CS_WE_RAS_CAS <= 4'b1111; // NOP - not 1xxx - some platforms have CS tied to ground!
 			STATE <= 1;
 			reg_din <= sys_DIN;
 			out_data_valid <= {out_data_valid[1:0], sys_wr_data_valid};
@@ -196,8 +207,9 @@ module SDRAM_16bit(
 					RET <= 6;
 					DLY <= sys_cmd_ack[1] ? sys_cmd_ack[0] ? `RD2 - 6 : `RD1 - 6 : `WR2 - 2;
 				end
-				
+			
 			endcase
+		end
 	end
 	
 endmodule

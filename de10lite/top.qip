@@ -1,0 +1,5 @@
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) de10lite_top.qip]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) dcm.qip]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) dcm_misc.qip]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) dcm_cpu.qip]
+
