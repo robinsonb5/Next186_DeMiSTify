@@ -370,7 +370,7 @@ rtc_cs<='0';
 		c64_joy3 => c64_joy3,
 		c64_joy4 => c64_joy4,
 		c64_keys => c64_keys(63 downto 0),
-		c64_joykey_ena => '1', -- Set to 1 if you want the C64 keys to open the menu and emulate joypad buttons
+		c64_joykey_ena => '0', -- Set to 1 if you want the C64 keys to open the menu and emulate joypad buttons
 
 		c64_restore_in => c64_nmi_n and c64_restore_key_n,
 		c64_restore_out => c64_keys(64),

@@ -115,7 +115,9 @@ assign SDRAM2_nWE = 0;
 
 parameter CONF_STR = {
 	"NEXT186;;",
+`ifndef DEMISTIFY
 	"S1C,CUEISO,Mount CD;",
+`endif
 	"O24,CPU Speed,Maximum,/2,/3,/4,/8,/16,/32;",
 	"O56,ISA Bus Wait,1us,2us,3us,4us;",
 	"O7,Fake 286,Off,On;",
@@ -249,7 +251,7 @@ assign ps2_mouse_dat = PS2M_DAT;
 assign PS2M_CLK_OUT = ps2_mouse_clk_i;
 assign PS2M_DAT_OUT = ps2_mouse_dat_i;
 
-user_io #(.STRLEN($size(CONF_STR)>>3), .FEATURES(32'h580) /* Secondary IDE - ATA, Primary Slave - CDROM*/) user_io(
+user_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(2000), .PS2BIDIR(1'b1)) user_io(
 `else
 user_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(2000), .PS2BIDIR(1'b1), .FEATURES(32'h580) /* Secondary IDE - ATA, Primary Slave - CDROM*/) user_io(
 `endif
@@ -293,7 +295,11 @@ user_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(2000), .PS2BIDIR(1'b1), .FEATURES
 	.img_size        ( img_size      ),
 `ifdef DEMISTIFY
 	.ps2_kbd_clk     ( ps2k_clk_fw   ), 
-	.ps2_kbd_data    ( ps2k_dat_fw   )
+	.ps2_kbd_data    ( ps2k_dat_fw   ),
+	.ps2_kbd_clk_i   ( ps2_kbd_clk_i ),
+	.ps2_kbd_data_i  ( ps2_kbd_dat_i ),
+	.ps2_mouse_clk_i ( 1'b1 ),  
+	.ps2_mouse_data_i( 1'b1 )
 `else
 	.ps2_kbd_clk     ( ps2_kbd_clk   ), 
 	.ps2_kbd_data    ( ps2_kbd_dat   ),
@@ -494,6 +500,13 @@ assign ide_irq_ack[0] = IDE_CS[0] && IDE_A == 4'd7;
 //reg [3:0] dbg_ide_addr /* synthesis noprune */;
 //always @(posedge clk_cpu) if (|IDE_CS) dbg_ide_addr <= IDE_A;
 
+`ifdef DEMISTIFY
+
+assign IDE_INT=1'b0;
+assign hdd_cmd_req=1'b0;
+assign hdd_dat_req=1'b0;
+
+`else
 ide ide (
 	.clk(clk_cpu), // system clock
 	.clk_en(1'b1),
@@ -527,6 +540,8 @@ ide ide (
 	.hdd_data_rd   ( hdd_data_rd  ),
 	.hdd_data_wr   ( hdd_data_wr  )
 );
+
+`endif
 
 cdda_fifo cdda_fifo (
 	.clk_sys       ( clk_cpu      ),

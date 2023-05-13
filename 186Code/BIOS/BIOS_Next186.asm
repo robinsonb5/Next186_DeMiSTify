@@ -190,7 +190,7 @@ font8x14	equ	font8x16 - 0e00h
 
 		org 0c000h
 bios:        
-biosmsg     db 'Next186 MiST SoC PC BIOS (C) 2017 Nicolae Dumitrache', 0
+biosmsg     db 'Next186 DeMiSTify PC BIOS (C) 2017 Nicolae Dumitrache', 0
 msgmb       db 'MB SD Card', 13, 10, 0
 msgkb       db 'PS2 KB detected', 13, 10, 0
 
@@ -342,7 +342,7 @@ ELSE
 ENDIF        
 
 nokb:   
-		mov     byte ptr KbdFlags3, 0   ; kb not present
+		mov     byte ptr KbdFlags3, NoKeyboard ; AMR - avoiding writing if no PS/2 KB, avoiding interference with C64 keyboard.
 kbok:
 		mov     al, 0adh
 		out     64h, al      ; disable kb interface
@@ -416,8 +416,8 @@ COMFlush:
 		call    dispAX
 		mov     si, offset msgmb
 		call    prts
-		test    byte ptr KbdFlags3, 10h
-		jz      nokbmsg
+		test    byte ptr KbdFlags3, NoKeyboard
+		jnz      nokbmsg
 		mov     si, offset msgkb
 		call    prts
 nokbmsg:
@@ -548,7 +548,7 @@ Insert          equ     80h
 LCtrDown        equ     1
 LAltDown        equ     2
 SysReqDown      equ     4
-Pause           equ     8
+PauseFlag       equ     8
 ScrLockDown     equ     10h
 NumLockDown     equ     20h
 CapsLockDown    equ     40h
@@ -567,6 +567,7 @@ NumLockLED      equ     2
 CapsLockLED     equ     4
 SetRepeat       equ     8       ; Set auto repeat command in progress
 AckReceived     equ     10h
+NoKeyboard      equ     80h
 LEDUpdate       equ     40h
 
 IFDEF SCANCODE1
@@ -736,8 +737,8 @@ noIns:
 		jc      short NormalKey   ; CTRL+NumLock = Pause
 		test    dl, CtrlDown
 		jz      short SetFlagsKey1
-		mov     dl, bl      ; restore NumLock flag
-		or      dh, Pause   ; set Pause bit
+		mov     dl, bl        ; restore NumLock flag
+		or      dh, PauseFlag ; set Pause bit
 SetFlagsKey1:
 		jmp     SetFlagsKey
 E0Key:
@@ -809,7 +810,7 @@ pushKey:
 		mov     ah, 5
 		int     16h
 		pop     cx
-		and     dh, not Pause    ; clear Pause bit
+		and     dh, not PauseFlag  ; clear Pause bit
 SetFlagsKey:
 		and     cl, not (LastE0 or LastE1)    ; not prefix key code, clear all prefixes
 SetFlags:
@@ -1016,8 +1017,8 @@ noIns:
 		jc      short noPause
 		test    dl, CtrlDown
 		jz      short SetFlagsKey1
-		mov     dl, bl      ; restore NumLock flag
-		or      dh, Pause   ; set Pause bit
+		mov     dl, bl        ; restore NumLock flag
+		or      dh, PauseFlag ; set Pause bit
 SetFlagsKey1:
 		jmp     SetFlagsKey
 E0Key:
@@ -1094,7 +1095,7 @@ pushKey:
 		int     16h
 nopush:        
 		pop     cx
-		and     dh, not Pause    ; clear Pause bit
+		and     dh, not PauseFlag ; clear Pause bit
 SetFlagsKey:
 		and     cl, not (LastE0 or LastE1 or LastF0)    ; not prefix key code, clear all prefixes
 SetFlags:
@@ -1525,7 +1526,8 @@ setmode2a:
 		out     dx, ax     ; vtotal9, lcr8, vsync8, vde8, vtotal8
 		xor     ah, ah
 		inc     al
-		out     dx, ax   ; clear preset row scan
+		out     dx, ax
+   ; clear preset row scan
 		mov     ah, cs:crtc9[di]
 		inc     al
 		out     dx, ax     ; set repln, lcr9, char height
@@ -1586,7 +1588,8 @@ setmode4:
 		mov     al, 0
 		out     dx, al      ; 0 pan
 		pop     ax
-		mov     ah, al    ; set half dot clock
+		mov     ah, al
+    ; set half dot clock
 		mov     dx, 3c4h    ; SC
 		mov     al, 01h
 		out     dx, ax
@@ -2044,7 +2047,7 @@ writecharTTY:
 		ret        
 
 tty:    ; dx=xy, bh=page, al=char, bl=attr, ah=0ah(no attr) or 09h(with attr)
-		test    word ptr KbdFlags2, Pause
+		test    word ptr KbdFlags2, PauseFlag
 		jnz     short tty
 		push    cx
 		cmp     al, 7
@@ -3905,7 +3908,11 @@ sps2b1:
 		jz      short sps2_kb
 		mov     al, 0d4h    ; next mouse
 		out     64h, al
+		jmp     short sps2_out
 sps2_kb:
+		test    byte ptr KbdFlags3, NoKeyboard
+		jnz     exit
+sps2_out:
 		mov     al, ah
 		out     60h, al     ; send byte
 exit:        
@@ -3948,8 +3955,8 @@ sendcmd endp
 
 enableKbIfPresent proc near ; input DS = 40h
 ; modify AL, flags
-		test    byte ptr KbdFlags3, 10h
-		jz      short noenablekb
+;		test    byte ptr KbdFlags3, 10h ; AMR - force keyboard active for C64 keyboard
+;		jz      short noenablekb
 		mov     al, 0aeh
 		out     64h, al     ; enable kb interface
 noenablekb:        
@@ -4118,14 +4125,20 @@ sdcmd:              ; in SI=6 bytes cmd buffer, DX=03dah, out AH = 0ffh on error
 		mov     cx, 6
 		call    sdwblk
 sdresp:
+		push    di  ; AMR - make SD card timeout more forgiving
+		mov     di, 0ffh
 		xor     si, si
-sdresp1:
-		call    sdrb
-		inc     si
+sdrespouter:
+		inc     di
 		jz      short sdcmd1
+sdresp1:
+		inc     si
+		jz      short sdrespouter
+		call    sdrb
 		cmp     ah, 0ffh
 		je      short sdresp1
-sdcmd1: ret         
+sdcmd1: pop     di
+        ret         
 
 ;---------------------  read ----------------------
 sdverify:
