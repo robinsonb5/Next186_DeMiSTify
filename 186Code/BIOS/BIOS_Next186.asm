@@ -823,6 +823,8 @@ SetFlags:
 		jnz     short SF1   ; can not update LEDS, so just write the flags and exit
 		or      al, LEDUpdate
 		xor     ch, al      ; insert the LEDs in KbdFlags4
+		test    byte ptr KbdFlags3, NoKeyboard
+		jnz     SF1
 		mov     ah, 0edh    ; set LED
 		mov     bl, 0
 		call    sendps2byte
@@ -3652,6 +3654,8 @@ Exit1:
 		jmp     short Exit
 
 SetAutoRpt: ; ------ fn 03h
+		test    byte ptr KbdFlags3, NoKeyboard
+		jnz     short Exit
 		cmp     ah, 5
 		jne     short Exit
 		push    dx

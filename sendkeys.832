@@ -1,0 +1,18 @@
+# Script to send keystrokes to the Next186 JTAG.
+# Use the 832ocd utility to upload this script with the "i" keystroke.
+# (The debug shell script will connect to an 832 CPU built with debug support
+# and invoke the 832ocd utility.)
+
+# Put the core in reset
+
+w 0xffffffd0 0x221 # EnableIO
+w 0xffffffd4 0x05 # UIO_KEYBOARD
+w 0xffffffd4 0x1e # SET1_A pressed
+w 0xffffffd0 0x220 # DisableIO
+
+w 0xffffffd0 0x221 # EnableIO
+w 0xffffffd4 0x05 # UIO_KEYBOARD
+w 0xffffffd4 0x9e # SET1_A released
+w 0xffffffd0 0x220 # DisableIO
+
+

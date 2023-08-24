@@ -300,7 +300,7 @@ module system (
 	wire TANDY_SND_PORT = PORT_ADDR[15:3] == (16'h00c0 >> 3); // 0xc0 - 0xc7
 	wire TANDY_PAGE_PORT = PORT_ADDR[15:0] == 16'h03df;
 	wire IDE_PORT0 = PORT_ADDR == 16'h03f6 || PORT_ADDR[15:3] == (16'h01f0 >> 3); // 0x3f6, 0x1f0-1f7
-	wire IDE_PORT1 = PORT_ADDR == 16'h0376 || PORT_ADDR[15:3] == (16'h0170 >> 3); // 0x1f6, 0x1f0-1f7
+	wire IDE_PORT1 = PORT_ADDR == 16'h0376 || PORT_ADDR[15:3] == (16'h0170 >> 3); // 0x376, 0x170-177
 
 	assign IDE_CS[0] = CPU_CE & IORQ && IDE_PORT0;
 	assign IDE_CS[1] = CPU_CE & IORQ && IDE_PORT1;

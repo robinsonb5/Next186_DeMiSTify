@@ -6,6 +6,7 @@
 #include "interrupts.h"
 #include "configstring.h"
 #include "diskimg.h"
+#include "ide.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -21,6 +22,37 @@ int UpdateKeys(int blockkeys)
 }
 
 char romname[12];
+
+extern unsigned char romtype;
+
+int loadimage(char *filename,int unit)
+{
+	int result=0;
+	switch(unit)
+	{
+		case 0:
+		case 1:
+		case 2:
+			if(filename && filename[0])
+			{
+				statusword|=1;
+				sendstatus();
+				romtype=unit+1;
+				result=LoadROM(filename);
+			}
+			break;
+		case '0': /* Pseudo-SD card */
+			diskimg_mount(0,unit-'0');				
+			return(diskimg_mount(filename,unit-'0'));				
+		case '1': /* IDE devices */
+		case '2':
+			OpenHardfile(filename,unit-'1');
+			break;
+	}
+	statusword&=~1;
+	sendstatus();
+	return(result);
+}
 
 char *autoboot()
 {
@@ -69,11 +101,29 @@ __weak void mainloop()
 	initc64keys();
 	while(1)
 	{
+		int t;
 		handlec64keys();
 		Menu_Run();
 		diskimg_poll();
+		HandleHDD();
 		if((framecounter++&8191)==0)
 			user_io_send_rtc(get_rtc());
+		t=TestKey(KEY_SET1_F11)&2;
+		if(TestKey(KEY_SET1_LCTRL) && t)
+		{
+			while(TestKey(KEY_SET1_F11) || TestKey(KEY_SET1_LCTRL)) /* Wait for both keys released */
+				HandlePS2RawCodes(1);
+			t=GetTimer(1000);
+			Menu_Message("Pausing..",0);
+			while(!CheckTimer(t))
+				;
+			Menu_ShowHide(0);
+			while(!(TestKey(KEY_SET1_F11)&2))
+				HandlePS2RawCodes(1);
+			while(TestKey(KEY_SET1_F11))
+				HandlePS2RawCodes(1);
+			Menu_Message("Unpausing...",1000);
+		}
 	}
 }
 

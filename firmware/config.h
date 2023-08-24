@@ -21,6 +21,10 @@ here, the number of units defaults to 4. */
 #define CONFIG_DISKIMG
 #define CONFIG_DISKIMG_UNITS 2
 
+#define CONFIG_IDE
+#define CONFIG_IDE_UNITS 2
+#define CONFIG_IDE_PC_HD
+
 /* Speed up file operations by "bookmarking" the file.
    (Undef to disable, or set to the number of desired bookmarks - a reasonable
    range would be between 4 and 16 */

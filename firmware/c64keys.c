@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "timer.h"
 #include "interrupts.h"
 #include "c64keys.h"
 #include "keyboard.h"
@@ -53,7 +54,7 @@ struct keyspecial specialtable[]=
 
 unsigned int c64keytable[]=
 {
-	KEY_SET1_BACKSPACE, /* $00	Inst/Del */
+	LAYER(KEY_SET1_INS,KEY_SET1_BACKSPACE), /* $00	Inst/Del */
 	LAYER(KEY_SET1_NKENTER,KEY_SET1_ENTER), /* $01	Return */
 	LAYER(QUAL_BLOCKLAYER|KEY_SET1_RCTRL,QUAL_SPECIAL|0), /* $02	Crsr l/r	- special handling needed */
 	LAYER(KEY_SET1_F12,QUAL_SPECIAL|5), /* $03	F7/F8 */
@@ -107,17 +108,17 @@ unsigned int c64keytable[]=
 	LAYER(KEY_SET1_NUMLOCK,KEY_SET1_LEFTBRACE), /* $2E	@ */
 	KEY_SET1_COMMA, /* $2F	< */
 	
-	KEY_SET1_BACKSLASH, /* $30	£ */
+	LAYER(KEY_SET1_END,KEY_SET1_BACKSLASH), /* $30	£ */
 	LAYER(KEY_SET1_NKASTERISK,KEY_SET1_RIGHTBRACE), /* $31	* */
 	KEY_SET1_APOSTROPHE, /* $32	] */
-	KEY_SET1_DELETE, /* $33	Clr/ Home */
+	LAYER(KEY_SET1_HOME,KEY_SET1_DELETE), /* $33	Clr/ Home */
 	QUAL_RSHIFT|KEY_SET1_RSHIFT, /* $34	Right shift - special handling needed */
 	LAYER(KEY_SET1_HASH,KEY_SET1_TICK), /* $35	= */
 	KEY_SET1_HASH, /* $36	↑ */
 	LAYER(KEY_SET1_NKPLUS,KEY_SET1_SLASH), /* $37	? */
 
-	LAYER(KEY_SET1_ESC,KEY_SET1_1), /* $38	1 */
-	0, /* $39	← - intercepted as menu key */
+	LAYER(KEY_SET1_NUMLOCK,KEY_SET1_1), /* $38	1 */
+	LAYER(KEY_SET1_F12,KEY_SET1_ESC), /* $39	← - intercepted as menu key */
 	LAYER(KEY_SET1_TAB,QUAL_CTRL|KEY_SET1_LCTRL), /* $3A	Control */
 	KEY_SET1_2, /* $3B	2 */
 	KEY_SET1_SPACE, /* $3C	Space */
@@ -129,15 +130,16 @@ unsigned int c64keytable[]=
 static void c64_rb_write(struct c64keyboard *r,int in)
 {
 //	printf("%x ",in);
+	int mv=Menu_Visible();
+	PS2KeyboardReceive(in); /* Send keystrokes to the OSD */
+	if(mv)
+		return;
 	r->outbuf[r->out_cpu]=in;
 	r->out_cpu=(r->out_cpu+1) & (C64KEY_RINGBUFFER_SIZE-1);
 }
 
 void c64keyboard_write(struct c64keyboard *r,int in)
 {
-	int mv=Menu_Visible();
-	if(mv)
-		return;
 	if(in&0x80) /* Is this an extended code */
 		c64_rb_write(r,0xe0);
 	if(in&0x100)
@@ -274,21 +276,33 @@ void handlec64keys()
 						{
 							/* If the key requires special handling, cancel any shifting before sending the key code
 								unless both shift keys are down */
-							switch(c64keys.qualifiers&(QUAL_LSHIFT|QUAL_RSHIFT))
+							int qual=QUAL_LSHIFT | QUAL_RSHIFT;
+							if(keyup)
+								qual&=amicode;
+							else
+							{
+								/* On downstroke remember which qualifiers were held when the key was pressed. */
+								amicode=(amicode&~qual); /* Mask off previous quals */
+								qual&=c64keys.qualifiers;
+								amicode|=qual;
+								c64keytable[code]=amicode;
+							}
+
+							switch(qual)
 							{
 								case 0:
 									amicode=specialtable[amicode&0xff].unshifted;
 									break;
 								case QUAL_LSHIFT:
 									amicode=specialtable[amicode&0xff].shifted;
-									if(keyup)
+									if(keyup & (c64keys.qualifiers&QUAL_LSHIFT))
 										amiqualdown=KEY_SET1_LSHIFT;
 									else
 										amiqualup=KEY_SET1_LSHIFT|0x100;
 									break;
 								case QUAL_RSHIFT:
 									amicode=specialtable[amicode&0xff].shifted;
-									if(keyup)
+									if(keyup & (c64keys.qualifiers&QUAL_RSHIFT))
 										amiqualdown=KEY_SET1_RSHIFT;
 									else
 										amiqualup=KEY_SET1_RSHIFT|0x100;

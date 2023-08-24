@@ -1,0 +1,35 @@
+# Script to upload the Next186 BIOS over JTAG/
+# Use the 832ocd utility to upload this script with the "i" keystroke.
+# (The debug shell script will connect to an 832 CPU built with debug support
+# and invoke the 832ocd utility.)
+
+# Put the core in reset
+
+w 0xffffffd0 0x221
+w 0xffffffd4 0x1e # Setstatus2
+w 0xffffffd4 1
+w 0xffffffd0 0x220
+
+# Upload the file.
+# (Some cores might require the file's size and index to be sent first)
+w 0xffffffd0 0x205
+w 0xffffffd4 0x53 # file TX
+w 0xffffffd4 1
+w 0xffffffd0 0x204
+
+w 0xffffffd0 0x205
+w 0xffffffd4 0x54 # file TX DAT
+P 0xffffffd4 186Code/BIOS/Next186.ROM # Send a file via Programmed I/O
+w 0xffffffd0 0x204
+
+w 0xffffffd0 0x205
+w 0xffffffd4 0x53 # file TX
+w 0xffffffd4 0
+w 0xffffffd0 0x204
+
+# Clear reset
+w 0xffffffd0 0x221
+w 0xffffffd4 0x1e # Setstatus2
+w 0xffffffd4 0
+w 0xffffffd0 0x220
+

@@ -175,7 +175,8 @@ module KB_Mouse_8042(
 						8'had: cmdbyte[2] <= 1;	// disable kb
 						8'hae: cmdbyte[2] <= 0;	// enable kb
 						8'hd4: next_mouse <= 1;	//	write next byte to mouse
-						/*8'hf0, 8'hf2, 8'hf4, 8'hf6, 8'hf8, 8'hfa, 8'hfc,*/ 8'hfe: CPU_RST <= 1; // CPU reset
+						/*8'hf0, 8'hf2, 8'hf4, 8'hf6, 8'hf8, 8'hfa, 8'hfc,*/
+						8'hfe: CPU_RST <= 1; // CPU reset
 					endcase 
 				else begin	// 0x60 write
 					if(wcfg) cmdbyte <= {din[5:4], din[1:0]};
@@ -221,6 +222,8 @@ module PS2Interface(
 	initial data_out_ready = 1;
 	initial data_in_ready = 1;
 	
+	reg [13:0] timeout;
+	
 	reg [1:0]s_clk = 2'b11;
 	wire ps2_clk_fall = s_clk == 2'b10;
 	reg [9:0]data = 0;
@@ -234,7 +237,7 @@ module PS2Interface(
 	assign PS2_DATA_O = rdata;// ? 1'bz : 1'b0;
 	assign data_out = data[7:0];
 	assign data_shift = ~data_in_ready && delay100us && ps2_clk_fall;
-
+	
 	always @(posedge clk) begin
 		if(clk_sample) begin
 			s_ps2_clk <= PS2_CLK_I; // debounce PS2 clock and data
@@ -244,17 +247,26 @@ module PS2Interface(
 		s_clk <= {s_clk[0], s_ps2_clk};
 		if(data_out_ready) rd_progress <= 1'b0;
 
+		if(data_in_ready)
+			timeout<= 14'd0;
+		if(timeout==14'd1)
+			data_in_ready<= 1'b1;
+		if(|timeout && clk_sample)
+			timeout<=timeout-1'b1;
+
 		if(~data_in_ready) begin	// send data to PS2
 			if(data_shift) data_in_ready <= data_in ^ s_ps2_data;
-		end else if(wr && ~rd_progress) data_in_ready <= 1'b0;	// initiate data sending to PS2
-		else if(~data_out_ready) begin	// receive data from PS2
+		end else if(wr && ~rd_progress) begin
+			data_in_ready <= 1'b0;	// initiate data sending to PS2
+			timeout<=~(14'd0);
+		end	else if(~data_out_ready) begin	// receive data from PS2
 			if(ps2_clk_fall) begin
 				rd_progress <= 1'b1;
 				if(rd_progress) {data, data_out_ready} <= {s_ps2_data, data[9:1], ~data[0]}; // receive is ended by data[9]
 				else data <= 10'b0111111111;
 			end
 		end else if(rd) data_out_ready <= 1'b0; // initiate data receiving from PS2
-
+		
 		rclk <= ((~data_out_ready & data_in_ready) | (~data_in_ready & delay100us));
 		rdata <= (data_in_ready | data_in | ~delay100us);
 	end
